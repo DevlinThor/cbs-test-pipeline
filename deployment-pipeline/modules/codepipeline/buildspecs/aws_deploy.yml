@@ -1,0 +1,31 @@
+version: 0.2
+
+env:
+  variables:
+     TERRAFORM_VERSION : "0.13.3"
+
+phases:
+  install:
+    runtime-versions:
+        golang: 1.14
+    commands:
+       # Terraform
+       - curl -s -qL -o terraform.zip https://releases.hashicorp.com/terraform/$TERRAFORM_VERSION/terraform_$TERRAFORM_VERSION\_linux_amd64.zip
+       - unzip -o terraform.zip
+       - mv terraform /usr/bin
+       # Fix to Lets Encrypt CA cert expiring
+       - sed -i 's/mozilla\/DST_Root_CA_X3.crt/!mozilla\/DST_Root_CA_X3.crt/g' /etc/ca-certificates.conf
+       - update-ca-certificates 
+       # AWS Account switching
+       - go get github.com/uber/assume-role-cli/cli/assume-role
+       
+  pre_build:
+    commands:
+      - TF_VAR_pipeline_monitor_package_location=$CODEBUILD_SRC_DIR_pr_monitor/pr_monitor-${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip
+      - TF_VAR_staging=$STAGING
+    
+  build:
+    commands:
+       - echo "Running script to bootstrap and apply terraform.."
+       - assume-role --role "${ROLE_ARN}" --role-session-name networkservices-codepipeline sh aws/update_account.sh
+     

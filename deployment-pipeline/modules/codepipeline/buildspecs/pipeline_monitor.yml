@@ -1,0 +1,53 @@
+version: 0.2
+env:
+  exported-variables:
+    - VERSION
+phases:
+  install:
+    runtime-versions:
+      golang: 1.14
+      ruby: 2.7
+    commands:
+      # Testing tools
+      - go get gotest.tools/gotestsum
+      # Go Linter
+      - go get -u golang.org/x/lint/golint
+      - # Ineffectual assignments
+      - go get -u github.com/gordonklaus/ineffassign
+      - # Links verification
+      - gem install awesome_bot
+  pre_build:
+    commands:
+      # This is a terrible hack, the proper way to do this is through exported-variables and namespace, but Terraform lacks the support
+      # More info:
+      #   - https://docs.aws.amazon.com/codepipeline/latest/userguide/reference-variables.html
+      #   - https://github.com/terraform-providers/terraform-provider-aws/issues/11418
+      #
+      # Once the Terraform issue gets closed we should refactor refactor this.
+      - VERSION=$CODEBUILD_RESOLVED_SOURCE_VERSION
+  build:
+    commands:
+      - cd services/pr_monitor
+      # Fail build if Go code is not canonical
+      - golint -set_exit_status ./...
+      # Test for ineffectual assignments
+      - ineffassign .
+      # Vet the code
+      - go vet ./...
+      # Fail build if there are broken links in the documentation
+      - awesome_bot --white-list http://localhost,http://api.change.internal.ecs --skip-save-results $(find . -name *.md)
+      # Build Go Function
+      - GO111MODULE=on gotestsum -f short-verbose --junitfile pipeline_monitor.xml ./...
+      - GOOS=linux go build -o main main.go
+      - zip pr_monitor-${VERSION}.zip main
+
+reports:
+  capabilities:
+    files:
+      - 'services/pr_monitor/pipeline_monitor.xml'
+
+artifacts:
+  name: pr_monitor
+  discard-paths: yes
+  files:
+    - 'services/pr_monitor/pr_monitor-${VERSION}.zip'

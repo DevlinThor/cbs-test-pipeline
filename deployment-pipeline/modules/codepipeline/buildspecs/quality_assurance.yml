@@ -1,0 +1,18 @@
+version: 0.2
+
+env:
+  variables:
+     TERRAFORM_VERSION : "0.13.3"
+
+phases:
+  install:
+    commands:
+      # Terraform
+      - curl -s -qL -o terraform.zip https://releases.hashicorp.com/terraform/$TERRAFORM_VERSION/terraform_$TERRAFORM_VERSION\_linux_amd64.zip
+      - unzip -o terraform.zip
+      - mv terraform /usr/bin
+     
+  build:
+    commands:
+      # Fail build if format is not canonical
+      - terraform fmt -recursive -check
